@@ -1,0 +1,32 @@
+# FROM nvidia/cuda:12.1.0-runtime-ubuntu20.04
+# FROM nvidia/cuda:11.7.1-runtime-ubuntu20.04
+# FROM nvidia/cuda:12.4.0-runtime-ubuntu22.04 
+FROM nvidia/cuda:12.6.0-runtime-ubuntu22.04 
+
+# 비대화형 모드 설정
+ENV DEBIAN_FRONTEND=noninteractive
+
+# Python 3.13, 필수 빌드 도구, wget 및 기타 의존성 설치
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    software-properties-common \
+    && add-apt-repository ppa:deadsnakes/ppa \
+    && apt-get update && apt-get install -y --no-install-recommends \
+    python3.12 \
+    python3.12-dev \
+    python3.12-venv \
+    build-essential \
+    wget \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+# pip 설치 (패키지에 포함되어 있지 않을 경우)
+RUN wget https://bootstrap.pypa.io/get-pip.py && python3.12 get-pip.py && rm get-pip.py
+
+# requirements.txt 복사 및 의존성 설치
+COPY requirements.txt /app/
+RUN python3.12 -m pip install --upgrade pip
+RUN python3.12 -m pip install --no-cache-dir -r requirements.txt
+RUN pip install --upgrade six
+
+WORKDIR /vol

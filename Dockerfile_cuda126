@@ -1,0 +1,73 @@
+# CUDA 11.8과 Ubuntu 22.04를 기반으로 한 베이스 이미지
+# FROM nvidia/cuda:11.8.0-cudnn8-devel-ubuntu22.04
+# FROM nvidia/cuda:12.6.0-runtime-ubuntu22.04 
+FROM nvidia/cuda:12.4.0-runtime-ubuntu22.04 
+
+# 환경 변수 설정
+ENV DEBIAN_FRONTEND=noninteractive \
+    TZ=Asia/Seoul \
+    PYTHON_VERSION=3.10.14 \
+    PYTHON_PIP_VERSION=24.2 \
+    LANG=ko_KR.UTF-8 \
+    LANGUAGE=ko_KR:ko \
+    LC_ALL=ko_KR.UTF-8
+
+# 의존성 설치, 시간대 설정, 로케일 생성 및 정리
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    wget \
+    zlib1g-dev \
+    libncurses5-dev \
+    libgdbm-dev \
+    libnss3-dev \
+    libssl-dev \
+    libsqlite3-dev \
+    libreadline-dev \
+    libffi-dev \
+    libbz2-dev \
+    liblzma-dev \
+    tk-dev \
+    uuid-dev \
+    tzdata \
+    git \
+    libaio1 \
+    unzip \
+    sudo \
+    libxml2 \
+    locales && \
+    ln -fs /usr/share/zoneinfo/$TZ /etc/localtime && \
+    dpkg-reconfigure --frontend noninteractive tzdata && \
+    locale-gen ko_KR.UTF-8 && \
+    apt-get clean && rm -rf /var/lib/apt/lists/*
+
+# Python 3.10.14 소스에서 설치 및 빌드 아티팩트 정리
+RUN cd /usr/src && \
+    wget https://www.python.org/ftp/python/${PYTHON_VERSION}/Python-${PYTHON_VERSION}.tgz && \
+    tar xzf Python-${PYTHON_VERSION}.tgz && \
+    cd Python-${PYTHON_VERSION} && \
+    ./configure --enable-optimizations && \
+    make -j"$(nproc)" && \
+    make altinstall && \
+    ln -s /usr/local/bin/python3.10 /usr/bin/python3 && \
+    ln -s /usr/local/bin/pip3.10 /usr/bin/pip3 && \
+    cd / && rm -rf /usr/src/Python-${PYTHON_VERSION} /usr/src/Python-${PYTHON_VERSION}.tgz
+
+# pip 특정 버전으로 업그레이드
+RUN pip3 install --no-cache-dir --upgrade pip==${PYTHON_PIP_VERSION}
+
+# Docker 레이어 캐싱을 활용하기 위해 requirements.txt 복사
+COPY requirements.txt /app/
+
+# PyTorch(CUDA 11.8 포함)를 비롯한 Python 의존성 설치
+RUN pip3 install --no-cache-dir -r /app/requirements.txt && \
+    pip3 install --no-cache-dir torch --index-url https://download.pytorch.org/whl/cu124
+
+
+# git-lfs 설치 및 정리
+RUN wget https://github.com/git-lfs/git-lfs/releases/download/v3.1.4/git-lfs-linux-amd64-v3.1.4.tar.gz && \
+    tar -xzf git-lfs-linux-amd64-v3.1.4.tar.gz && \
+    ./install.sh && \
+    rm -rf git-lfs-linux-amd64-v3.1.4.tar.gz install.sh README.md CHANGELOG.md LICENSE.md
+
+# 기본 명령어로 nvidia-smi 실행하여 GPU 확인
+WORKDIR /vol
